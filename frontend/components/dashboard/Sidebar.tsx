@@ -1,5 +1,5 @@
 'use client'
-import { Home, TrendingUp, Users, Briefcase, Layout, AlertTriangle, Settings } from 'lucide-react'
+import { Home, TrendingUp, Users, Briefcase, Layout, AlertTriangle, Settings, BarChart3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface SidebarProps {
@@ -24,6 +24,22 @@ export default function Sidebar({ isOpen }: SidebarProps) {
         isOpen ? 'w-60' : 'w-16'
       )}
     >
+      {/* Brand */}
+      <div className={cn(
+        'flex items-center h-16 border-b border-sidebar-border flex-shrink-0',
+        isOpen ? 'px-4 gap-3' : 'px-0 justify-center'
+      )}>
+        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-blue-600 shadow-lg shadow-blue-600/30 flex-shrink-0">
+          <BarChart3 className="w-5 h-5 text-white" />
+        </div>
+        {isOpen && (
+          <div className="min-w-0 leading-tight">
+            <p className="text-sm font-bold text-sidebar-foreground truncate">Sigzen BI</p>
+            <p className="text-[11px] text-sidebar-foreground/60 truncate">CEO Command Center</p>
+          </div>
+        )}
+      </div>
+
       <nav className="flex-1 py-6 px-2 space-y-1 overflow-y-auto">
         {navItems.map((item, idx) => {
           const Icon = item.icon

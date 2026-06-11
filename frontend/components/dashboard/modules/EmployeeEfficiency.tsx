@@ -163,7 +163,11 @@ export default function EmployeeEfficiency() {
                   backgroundColor: 'rgba(15, 23, 42, 0.95)',
                   border: '1px solid rgba(255,255,255,0.1)',
                   borderRadius: '10px',
+                  padding: '10px 14px',
                 }}
+                itemStyle={{ color: '#e2e8f0' }}
+                labelStyle={{ color: '#e2e8f0', fontWeight: 600 }}
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                 formatter={(value: any) => [`${value}%`, 'Utilization']}
               />
               <Bar dataKey="utilization" radius={[0, 8, 8, 0]}>

@@ -10,8 +10,20 @@ Thumbs.db
 # Dependencies
 node_modules/
 
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Test / scratch artifacts
+backend/help_test.json
+backend/server.log
+
 # Build outputs
 .next/
+*.tsbuildinfo
 
 # AI/Vector DB
 chroma_db/

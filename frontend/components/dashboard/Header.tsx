@@ -1,18 +1,22 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Menu, Sun, Moon, Bell, LogOut, User, ChevronDown, Calendar } from 'lucide-react'
+import Link from 'next/link'
+import { Menu, Sun, Moon, Bell, LogOut, User, ChevronDown, Calendar, PlugZap, Database, Zap } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabase'
 import { signOut } from '@/lib/auth'
 import { useYear } from '@/lib/yearContext'
+import { useERPSession } from '@/lib/session-context'
 
 interface HeaderProps {
   onMenuClick: () => void
   theme: string
   onThemeToggle: () => void
   onCustomizeClick: () => void
+  viewMode: 'supabase' | 'erp'
+  onViewModeChange: (mode: 'supabase' | 'erp') => void
 }
 
 function cn(...classes: (string | boolean | undefined)[]) {
@@ -24,6 +28,8 @@ export default function Header({
   theme,
   onThemeToggle,
   onCustomizeClick,
+  viewMode,
+  onViewModeChange,
 }: HeaderProps) {
   const [currentTime, setCurrentTime] = useState('')
   const [userName, setUserName] = useState('CEO')
@@ -32,7 +38,32 @@ export default function Header({
   const [yearMenuOpen, setYearMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const yearRef = useRef<HTMLDivElement>(null)
-  const { selectedYear, setSelectedYear, availableYears } = useYear()
+  const { selectedYear, setSelectedYear, supabaseYears, erpnextYears } = useYear()
+  const { erpType, isConnected } = useERPSession()
+
+  // The year dropdown reflects the active data source (mode toggle).
+  const activeYears = viewMode === 'erp' ? erpnextYears : supabaseYears
+
+  const renderYearOption = (year: number) => (
+    <button
+      key={year}
+      onClick={() => {
+        setSelectedYear(year)
+        setYearMenuOpen(false)
+      }}
+      className={cn(
+        "w-full flex items-center justify-between px-3 py-2 text-sm transition-colors text-left",
+        selectedYear === year
+          ? "bg-blue-600/20 text-blue-400 font-semibold"
+          : "text-foreground hover:bg-muted"
+      )}
+    >
+      <span>{year}</span>
+      {selectedYear === year && (
+        <span className="w-2 h-2 bg-blue-500 rounded-full" />
+      )}
+    </button>
+  )
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -113,6 +144,58 @@ export default function Header({
       {/* Right side */}
       <div className="flex items-center gap-2 md:gap-3">
 
+        {/* Data Source Toggle — Supabase ⟷ ERP */}
+        <div className="flex items-center p-0.5 rounded-lg bg-muted border border-border">
+          <button
+            onClick={() => onViewModeChange('supabase')}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all",
+              viewMode === 'supabase'
+                ? "bg-sky-500/15 text-sky-400 shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+            title="Historical BI data (Supabase)"
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Supabase</span>
+          </button>
+          <button
+            onClick={() => onViewModeChange('erp')}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all",
+              viewMode === 'erp'
+                ? "bg-emerald-500/15 text-emerald-400 shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+            title="Live ERP data (ERPNext)"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">ERP</span>
+          </button>
+        </div>
+
+        {/* ERP connection status — only relevant in ERP mode */}
+        {viewMode === 'erp' && (
+          isConnected ? (
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-emerald-500/10 border-emerald-500/30 text-emerald-400 text-xs font-medium"
+              title={`${erpType ?? 'ERP'} connector is live`}
+            >
+              <span className="w-2 h-2 rounded-full flex-shrink-0 bg-emerald-500 animate-pulse" />
+              <span className="hidden sm:inline capitalize">{(erpType ?? 'ERP')} Live</span>
+            </div>
+          ) : (
+            <Link
+              href="/connect"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-xs font-medium transition-colors"
+              title="Connect an ERP system"
+            >
+              <PlugZap className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="hidden sm:inline">Connect ERP</span>
+            </Link>
+          )
+        )}
+
         {/* Live Time */}
         <div className="text-xs md:text-sm text-muted-foreground font-medium hidden lg:block">
           {currentTime}
@@ -133,33 +216,25 @@ export default function Header({
           </button>
 
           {yearMenuOpen && (
-            <div className="absolute right-0 top-full mt-2 w-36 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
-              <div className="px-3 py-2 border-b border-border">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Filter by Year
+            <div className="absolute right-0 top-full mt-2 w-52 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
+              <div className="px-3 pt-2.5 pb-1.5 flex items-center gap-2">
+                <span className={cn(
+                  "w-1.5 h-1.5 rounded-full flex-shrink-0",
+                  viewMode === 'erp' ? "bg-emerald-500 animate-pulse" : "bg-sky-500"
+                )} />
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  {viewMode === 'erp' ? 'Live ERP Data' : 'Historical Data'}
+                  <span className="text-muted-foreground/60 normal-case font-normal">
+                    {viewMode === 'erp' ? ` · ${erpType ?? 'ERPNext'}` : ' · Supabase'}
+                  </span>
                 </p>
               </div>
-              <div className="py-1">
-                {availableYears.map(year => (
-                  <button
-                    key={year}
-                    onClick={() => {
-                      setSelectedYear(year)
-                      setYearMenuOpen(false)
-                    }}
-                    className={cn(
-                      "w-full flex items-center justify-between px-3 py-2 text-sm transition-colors text-left",
-                      selectedYear === year
-                        ? "bg-blue-600/20 text-blue-400 font-semibold"
-                        : "text-foreground hover:bg-muted"
-                    )}
-                  >
-                    <span>{year}</span>
-                    {selectedYear === year && (
-                      <span className="w-2 h-2 bg-blue-500 rounded-full" />
-                    )}
-                  </button>
-                ))}
+              <div className="py-0.5 pb-1.5">
+                {activeYears.length > 0
+                  ? activeYears.map(renderYearOption)
+                  : <p className="px-3 py-2 text-xs text-muted-foreground">
+                      {viewMode === 'erp' ? 'Connect ERP to see years' : 'No years available'}
+                    </p>}
               </div>
             </div>
           )}

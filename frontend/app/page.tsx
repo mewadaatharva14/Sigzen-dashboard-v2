@@ -6,15 +6,24 @@ import Sidebar from '@/components/dashboard/Sidebar'
 import DashboardGrid from '@/components/dashboard/DashboardGrid'
 import CustomizePanel from '@/components/dashboard/CustomizePanel'
 import ChatPanel from '@/components/dashboard/ChatPanel'
+import DataSourceBanner from '@/components/dashboard/DataSourceBanner'
 import { YearProvider } from '@/lib/yearContext'
+import { ERPSessionProvider } from '@/lib/session-context'
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [theme, setTheme] = useState('dark')
+  const [viewMode, setViewMode] = useState<'supabase' | 'erp'>('supabase')
   const [customizePanelOpen, setCustomizePanelOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
   const [visibleModules, setVisibleModules] = useState({
+    erpnext_accounting: true,
+    erpnext_sales_crm: true,
+    erpnext_procurement: true,
+    erpnext_inventory: true,
+    erpnext_projects: true,
+    erpnext_support: false,
     financial_health: true,
     revenue_growth: true,
     customer_growth: true,
@@ -41,6 +50,9 @@ export default function Page() {
     setTheme(savedTheme)
     document.documentElement.classList.toggle('dark', savedTheme === 'dark')
 
+    const savedMode = localStorage.getItem('dashboard-view-mode')
+    if (savedMode === 'erp' || savedMode === 'supabase') setViewMode(savedMode)
+
     const checkMobile = () => {
       const mobile = window.innerWidth < 768
       setIsMobile(mobile)
@@ -56,6 +68,11 @@ export default function Page() {
     setTheme(newTheme)
     localStorage.setItem('dashboard-theme', newTheme)
     document.documentElement.classList.toggle('dark', newTheme === 'dark')
+  }
+
+  const handleViewModeChange = (mode: 'supabase' | 'erp') => {
+    setViewMode(mode)
+    localStorage.setItem('dashboard-view-mode', mode)
   }
 
   const handleModuleToggle = (moduleId: string) => {
@@ -77,7 +94,8 @@ export default function Page() {
   }
 
   return (
-    <YearProvider>
+    <ERPSessionProvider>
+      <YearProvider>
       <div className="flex h-screen overflow-hidden bg-background">
         {isMobile && sidebarOpen && (
           <div
@@ -101,9 +119,12 @@ export default function Page() {
             theme={theme}
             onThemeToggle={handleThemeToggle}
             onCustomizeClick={() => setCustomizePanelOpen(true)}
+            viewMode={viewMode}
+            onViewModeChange={handleViewModeChange}
           />
           <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-            <DashboardGrid visibleModules={visibleModules} />
+            <DataSourceBanner viewMode={viewMode} />
+            <DashboardGrid visibleModules={visibleModules} viewMode={viewMode} />
           </main>
         </div>
 
@@ -115,8 +136,9 @@ export default function Page() {
         />
 
         {/* AI Chat Panel */}
-        <ChatPanel />
+        <ChatPanel viewMode={viewMode} />
       </div>
-    </YearProvider>
+      </YearProvider>
+    </ERPSessionProvider>
   )
 }

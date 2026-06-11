@@ -5,9 +5,11 @@ from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from vanna_setup import get_vanna_instance, train_vanna
+from ai.vanna_setup import get_vanna_instance, train_vanna
 import psycopg2
 import psycopg2.extras
+from connectors.registry import get_connector
+from routes.erp import router as erp_router
 
 load_dotenv()
 
@@ -25,6 +27,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Generic, ERP-agnostic connection + session data routes (driver/registry layer).
+app.include_router(erp_router)
+
 # ── SUPABASE CLIENT (REST API) ────────────────────────
 def get_supabase() -> Client:
     url = os.getenv("SUPABASE_URL")
@@ -39,8 +44,15 @@ async def startup_event():
     global vn
     print("Starting Sigzen BI API...")
     print("Initializing Vanna AI...")
-    vn = get_vanna_instance()
-    print("Vanna AI ready!")
+    try:
+        vn = get_vanna_instance()
+        print("Vanna AI ready!")
+    except Exception as e:
+        # Ollama (used by Vanna for the AI chat) may be unavailable.
+        # Don't crash the API — the dashboard and ERPNext live data
+        # don't need it. The chat endpoint returns 503 while vn is None.
+        vn = None
+        print(f"Vanna AI unavailable (chat disabled): {e}")
 
 # ── REQUEST MODELS ────────────────────────────────────
 class ChatRequest(BaseModel):
@@ -62,6 +74,27 @@ def health():
     return {"status": "healthy"}
 
 # ── AVAILABLE YEARS ───────────────────────────────────
+def _erpnext_years() -> set:
+    """Years present in live ERPNext accounting data (empty set if offline).
+    Uses the env-configured ERPNext via the registry (credentials=None)."""
+    connector = get_connector("erpnext", None)
+    if connector.test_connection().get("status") != "online":
+        return set()
+
+    years = set()
+    rows = (
+        connector.get_sales_invoices()
+        + connector.get_purchase_invoices()
+        + connector.get_payment_entries()
+        + connector.get_journal_entries()
+    )
+    for row in rows:
+        date_str = row.get("posting_date") or row.get("transaction_date")
+        if date_str and len(date_str) >= 4 and date_str[:4].isdigit():
+            years.add(int(date_str[:4]))
+    return years
+
+
 @app.get("/api/years")
 def get_available_years():
     try:
@@ -71,14 +104,32 @@ def get_available_years():
             .order("month", desc=True)\
             .execute()
 
-        years = sorted(set([
-            int(row["month"][:4])
-            for row in response.data
-        ]), reverse=True)
+        supabase_years = set(
+            int(row["month"][:4]) for row in response.data
+        )
+
+        # Merge in years from live ERPNext data so its modules are selectable.
+        try:
+            erp_years = _erpnext_years()
+        except Exception:
+            erp_years = set()
+
+        years = sorted(supabase_years | erp_years, reverse=True)
+
+        # Default to the latest Supabase year so the (Supabase-driven)
+        # main dashboard stays populated on first load.
+        default_year = (
+            max(supabase_years) if supabase_years
+            else (years[0] if years else 2024)
+        )
 
         return {
             "years": years,
-            "default": years[0] if years else 2024
+            # Source-separated so the UI can label which years come from where
+            # (Supabase history vs live ERP) instead of guessing by a threshold.
+            "supabase_years": sorted(supabase_years, reverse=True),
+            "erpnext_years": sorted(erp_years, reverse=True),
+            "default": default_year
         }
     except Exception as e:
         raise HTTPException(
